@@ -1,0 +1,6 @@
+@chat.rede.webapi_HostAddress = http://localhost:5151
+
+GET {{chat.rede.webapi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
