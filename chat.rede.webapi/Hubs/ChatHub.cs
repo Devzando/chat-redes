@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.SignalR;
+﻿using chat.rede.webapi.models;
+using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
 
 namespace chat.rede.webapi.Hubs
@@ -16,12 +17,24 @@ namespace chat.rede.webapi.Hubs
             if (ConnectedUsers.Count >= MaxConnectedUsers)
             {
                 WaitingQueue.Enqueue(connectionId);
-                await Clients.Client(connectionId).SendAsync("QueueUpdate", "Você está na fila. Por favor espere...", WaitingQueue.Count-1);
+                var response = new ResponseMessage
+                {
+                    Message = "Você está na fila. Por favor espere...",
+                    QueueSize = WaitingQueue.Count,
+                    QueuePosition = GetQueuePosition(connectionId)
+                };
+                await Clients.Client(connectionId).SendAsync("QueueUpdate", response);
             }
             else
             {
                 ConnectedUsers.Add(connectionId);
-                await Clients.Client(connectionId).SendAsync("QueueUpdate", "Você está conectado.");
+                var response = new ResponseMessage
+                {
+                    Message = "Você está conectado.",
+                    QueueSize = WaitingQueue.Count,
+                    QueuePosition = 0
+                };
+                await Clients.Client(connectionId).SendAsync("connected", response);
             }
 
             await base.OnConnectedAsync();
@@ -38,14 +51,21 @@ namespace chat.rede.webapi.Hubs
                 if (WaitingQueue.TryDequeue(out var nextConnectionId))
                 {
                     ConnectedUsers.Add(nextConnectionId);
-                    await Clients.Client(nextConnectionId).SendAsync("QueueUpdate", "Você está conectado.");
+                    var response = new ResponseMessage
+                    {
+                        Message = "Você está conectado.",
+                        QueueSize = WaitingQueue.Count,
+                        QueuePosition = 0
+                    };
+                    await Clients.Client(nextConnectionId).SendAsync("QueueUpdate", response);
                 }
             }
             else
             {
                 WaitingQueue = new ConcurrentQueue<string>(WaitingQueue.Where(id => id != connectionId));
-                await Clients.All.SendAsync("QueueUpdate", "Um usuário saiu da fila. Por favor espere...", WaitingQueue.Count-1);
             }
+
+            await NotifyQueueStatus();
 
             await base.OnDisconnectedAsync(exception);
         }
@@ -54,12 +74,56 @@ namespace chat.rede.webapi.Hubs
         {
             if (ConnectedUsers.Contains(Context.ConnectionId))
             {
-                await Clients.All.SendAsync("ReceiveMessage", user, message);
+                var response = new ResponseMessage
+                {
+                    Message = message,
+                    QueueSize = WaitingQueue.Count,
+                    QueuePosition = 0,
+                    userName = user
+                };
+                await Clients.Client(ConnectedUsers.First(id => id != Context.ConnectionId)).SendAsync("ReceiveMessage", response);
             }
             else
             {
-                await Clients.Client(Context.ConnectionId).SendAsync("QueueUpdate", "Você está na fila. Por favor espere...", WaitingQueue.Count-1);
+                var response = new ResponseMessage
+                {
+                    Message = "Você está na fila. Por favor espere...",
+                    QueueSize = WaitingQueue.Count,
+                    QueuePosition = GetQueuePosition(Context.ConnectionId)
+                };
+                await Clients.Client(Context.ConnectionId).SendAsync("QueueUpdate", response);
             }
+        }
+
+        private async Task NotifyQueueStatus()
+        {
+            var response = new ResponseMessage
+            {
+                Message = "Você está na fila. Por favor espere...",
+                QueueSize = WaitingQueue.Count,
+                QueuePosition = 0,
+                exitQueue = true
+            };
+            var queuePosition = 0;
+            foreach (var connectionId in WaitingQueue)
+            {
+                response.QueuePosition = queuePosition;
+                await Clients.Client(connectionId).SendAsync("QueueUpdate", response);
+                queuePosition++;
+            }
+        }
+        private int GetQueuePosition(string connectionId)
+        {
+            var position = 0;
+            foreach (var id in WaitingQueue)
+            {
+                if (id == connectionId)
+                {
+                    return position;
+                }
+                position++;
+            }
+            return -1; // Retorna -1 se o connectionId não for encontrado, o que não deveria acontecer
         }
     }
 }
