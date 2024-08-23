@@ -7,5 +7,6 @@
         public int QueueSize { get; set; } = 0;
         public string userName { get; set; } = string.Empty;
         public bool exitQueue { get; set; } = false;
+        public bool isConnected { get; set; } = false;
     }
 }

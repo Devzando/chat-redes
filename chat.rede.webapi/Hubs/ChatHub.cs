@@ -32,7 +32,8 @@ namespace chat.rede.webapi.Hubs
                 {
                     Message = "Você está conectado.",
                     QueueSize = WaitingQueue.Count,
-                    QueuePosition = 0
+                    QueuePosition = 0,
+                    isConnected = true
                 };
                 await Clients.Client(connectionId).SendAsync("connected", response);
             }
@@ -55,7 +56,8 @@ namespace chat.rede.webapi.Hubs
                     {
                         Message = "Você está conectado.",
                         QueueSize = WaitingQueue.Count,
-                        QueuePosition = 0
+                        QueuePosition = 0,
+                        isConnected = true
                     };
                     await Clients.Client(nextConnectionId).SendAsync("QueueUpdate", response);
                 }
